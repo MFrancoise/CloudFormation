@@ -1,0 +1,93 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Windows Server with IIS, custom HTML, SG, and Name tag",
+
+  "Parameters": {
+    "VpcId": { "Type": "AWS::EC2::VPC::Id" },
+    "SubnetId": { "Type": "AWS::EC2::Subnet::Id" },
+    "KeyName": { "Type": "AWS::EC2::KeyPair::KeyName" },
+
+    "CustomHtml": { "Type": "String" },
+    "InstanceName": { "Type": "String" },
+
+    "SelectedRegion": {
+      "Type": "String",
+      "AllowedValues": ["us-east-1","us-east-2","us-west-1","us-west-2"]
+    },
+
+    "AvailabilityZone": {
+      "Type": "AWS::EC2::AvailabilityZone::Name"
+    },
+
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": ["t2.micro","t3.micro","t3.small"]
+    }
+  },
+
+  "Mappings": {
+    "RegionMap": {
+      "us-east-1": { "Windows": "ami-09639480113b0df96" },
+      "us-east-2": { "Windows": "ami-0c2e0f8f5f2f0f0f0" },
+      "us-west-1": { "Windows": "ami-0b2f6494ff0b07f8a" },
+      "us-west-2": { "Windows": "ami-0f2e8e1f5f0f0f0f0" }
+    }
+  },
+
+  "Resources": {
+    "WebSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP and RDP",
+        "VpcId": { "Ref": "VpcId" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3389,
+            "ToPort": 3389,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+
+    "WindowsServer": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Fn::FindInMap": ["RegionMap", { "Ref": "SelectedRegion" }, "Windows"]
+        },
+        "InstanceType": { "Ref": "InstanceType" },
+        "KeyName": { "Ref": "KeyName" },
+        "SubnetId": { "Ref": "SubnetId" },
+        "SecurityGroupIds": [{ "Ref": "WebSecurityGroup" }],
+
+        "Tags": [
+          { "Key": "Name", "Value": { "Ref": "InstanceName" } },
+          { "Key": "Environment", "Value": "Dev" },
+          { "Key": "Owner", "Value": "Souleymane" },
+          { "Key": "OS", "Value": "Windows" }
+        ],
+
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "<powershell>\nInstall-WindowsFeature -Name Web-Server\n$custom = \"${CustomHtml}\"\n$message = \"<h1>Francoise is proud to have deployed this</h1>\"\nSet-Content -Path 'C:\\inetpub\\wwwroot\\index.html' -Value ($message + $custom)\n</powershell>"
+          }
+        }
+      }
+    }
+  },
+
+  "Outputs": {
+    "PublicIP": {
+      "Value": { "Fn::GetAtt": ["WindowsServer", "PublicIp"] }
+    }
+  }
+}
